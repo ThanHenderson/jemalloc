@@ -92,6 +92,7 @@ CTL_PROTO(config_prof_libunwind)
 CTL_PROTO(config_stats)
 CTL_PROTO(config_utrace)
 CTL_PROTO(config_xmalloc)
+CTL_PROTO(opt_alloc32)
 CTL_PROTO(opt_abort)
 CTL_PROTO(opt_abort_conf)
 CTL_PROTO(opt_cache_oblivious)
@@ -427,6 +428,7 @@ static const ctl_named_node_t	config_node[] = {
 };
 
 static const ctl_named_node_t opt_node[] = {
+	{NAME("alloc32"),		CTL(opt_alloc32)},
 	{NAME("abort"),		CTL(opt_abort)},
 	{NAME("abort_conf"),	CTL(opt_abort_conf)},
 	{NAME("cache_oblivious"),	CTL(opt_cache_oblivious)},
@@ -2133,6 +2135,7 @@ CTL_RO_CONFIG_GEN(config_xmalloc, bool)
 
 /******************************************************************************/
 
+CTL_RO_NL_GEN(opt_alloc32, opt_alloc32, bool)
 CTL_RO_NL_GEN(opt_abort, opt_abort, bool)
 CTL_RO_NL_GEN(opt_abort_conf, opt_abort_conf, bool)
 CTL_RO_NL_GEN(opt_cache_oblivious, opt_cache_oblivious, bool)

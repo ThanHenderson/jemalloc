@@ -118,6 +118,9 @@ zero_realloc_action_t opt_zero_realloc_action =
 #endif
     ;
 
+// Control if alloc below 4GB boundary
+bool	opt_alloc32 = false;
+
 atomic_zu_t zero_realloc_count = ATOMIC_INIT(0);
 
 const char *const zero_realloc_mode_names[] = {
@@ -2720,6 +2723,7 @@ malloc_default(size_t size) {
 	dopts.num_items = 1;
 	dopts.item_size = size;
 
+	opt_alloc32 = true;
 	imalloc(&sopts, &dopts);
 	/*
 	 * Note that this branch gets optimized away -- it immediately follows
@@ -2735,6 +2739,45 @@ malloc_default(size_t size) {
 	return ret;
 }
 
+JEMALLOC_NOINLINE
+void *
+malloc32_default(size_t size) {
+	void *ret;
+	static_opts_t sopts;
+	dynamic_opts_t dopts;
+
+	/*
+	 * This variant has logging hook on exit but not on entry.  It's callled
+	 * only by je_malloc, below, which emits the entry one for us (and, if
+	 * it calls us, does so only via tail call).
+	 */
+
+	static_opts_init(&sopts);
+	dynamic_opts_init(&dopts);
+
+	sopts.null_out_result_on_error = true;
+	sopts.set_errno_on_error = true;
+	sopts.oom_string = "<jemalloc>: Error in malloc(): out of memory\n";
+
+	dopts.result = &ret;
+	dopts.num_items = 1;
+	dopts.item_size = size;
+
+	opt_alloc32 = true;
+	imalloc(&sopts, &dopts);
+	/*
+	 * Note that this branch gets optimized away -- it immediately follows
+	 * the check on tsd_fast that sets sopts.slow.
+	 */
+	if (sopts.slow) {
+		uintptr_t args[3] = {size};
+		hook_invoke_alloc(hook_alloc_malloc, ret, (uintptr_t)ret, args);
+	}
+
+	LOG("core.malloc.exit", "result: %p", ret);
+
+	return ret;
+}
 /******************************************************************************/
 /*
  * Begin malloc(3)-compatible functions.
@@ -2745,6 +2788,13 @@ void JEMALLOC_NOTHROW *
 JEMALLOC_ATTR(malloc) JEMALLOC_ALLOC_SIZE(1)
 je_malloc(size_t size) {
 	return imalloc_fastpath(size, &malloc_default);
+}
+
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN
+void JEMALLOC_NOTHROW *
+JEMALLOC_ATTR(malloc) JEMALLOC_ALLOC_SIZE(1)
+je_malloc32(size_t size) {
+	return imalloc_fastpath(size, &malloc32_default);
 }
 
 JEMALLOC_EXPORT int JEMALLOC_NOTHROW
@@ -3013,6 +3063,15 @@ je_free(void *ptr) {
 }
 
 JEMALLOC_EXPORT void JEMALLOC_NOTHROW
+je_free32(void *ptr) {
+	LOG("core.free.entry", "ptr: %p", ptr);
+
+	je_free_impl(ptr);
+
+	LOG("core.free.exit", "");
+}
+
+JEMALLOC_EXPORT void JEMALLOC_NOTHROW
 je_free_sized(void *ptr, size_t size) {
 	return je_sdallocx_noflags(ptr, size);
 }
@@ -3162,9 +3221,9 @@ je_pvalloc(size_t size) {
  */
 #include <features.h> // defines __GLIBC__ if we are compiling against glibc
 
-JEMALLOC_EXPORT void (*__free_hook)(void *ptr) = je_free;
-JEMALLOC_EXPORT void *(*__malloc_hook)(size_t size) = je_malloc;
-JEMALLOC_EXPORT void *(*__realloc_hook)(void *ptr, size_t size) = je_realloc;
+// JEMALLOC_EXPORT void (*__free_hook)(void *ptr) = je_free;
+// JEMALLOC_EXPORT void *(*__malloc_hook)(size_t size) = je_malloc;
+// JEMALLOC_EXPORT void *(*__realloc_hook)(void *ptr, size_t size) = je_realloc;
 #  ifdef JEMALLOC_GLIBC_MEMALIGN_HOOK
 JEMALLOC_EXPORT void *(*__memalign_hook)(size_t alignment, size_t size) =
     je_memalign;
@@ -3180,35 +3239,35 @@ JEMALLOC_EXPORT void *(*__memalign_hook)(size_t alignment, size_t size) =
 /* To force macro expansion of je_ prefix before stringification. */
 #    define PREALIAS(je_fn)	ALIAS(je_fn)
 #    ifdef JEMALLOC_OVERRIDE___LIBC_CALLOC
-void *__libc_calloc(size_t n, size_t size) PREALIAS(je_calloc);
+// void *__libc_calloc(size_t n, size_t size) PREALIAS(je_calloc);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_FREE
-void __libc_free(void* ptr) PREALIAS(je_free);
+// void __libc_free(void* ptr) PREALIAS(je_free);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_FREE_SIZED
-void __libc_free_sized(void* ptr, size_t size) PREALIAS(je_free_sized);
+// void __libc_free_sized(void* ptr, size_t size) PREALIAS(je_free_sized);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_FREE_ALIGNED_SIZED
-void __libc_free_aligned_sized(
-    void* ptr, size_t alignment, size_t size) PREALIAS(je_free_aligned_sized);
+// void __libc_free_aligned_sized(
+    // void* ptr, size_t alignment, size_t size) PREALIAS(je_free_aligned_sized);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_MALLOC
-void *__libc_malloc(size_t size) PREALIAS(je_malloc);
+// void *__libc_malloc(size_t size) PREALIAS(je_malloc);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_MEMALIGN
-void *__libc_memalign(size_t align, size_t s) PREALIAS(je_memalign);
+// void *__libc_memalign(size_t align, size_t s) PREALIAS(je_memalign);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_REALLOC
-void *__libc_realloc(void* ptr, size_t size) PREALIAS(je_realloc);
+// void *__libc_realloc(void* ptr, size_t size) PREALIAS(je_realloc);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_VALLOC
-void *__libc_valloc(size_t size) PREALIAS(je_valloc);
+// void *__libc_valloc(size_t size) PREALIAS(je_valloc);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___LIBC_PVALLOC
-void *__libc_pvalloc(size_t size) PREALIAS(je_pvalloc);
+// void *__libc_pvalloc(size_t size) PREALIAS(je_pvalloc);
 #    endif
 #    ifdef JEMALLOC_OVERRIDE___POSIX_MEMALIGN
-int __posix_memalign(void** r, size_t a, size_t s) PREALIAS(je_posix_memalign);
+// int __posix_memalign(void** r, size_t a, size_t s) PREALIAS(je_posix_memalign);
 #    endif
 #    undef PREALIAS
 #    undef ALIAS
@@ -4222,6 +4281,7 @@ label_done:
 JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
+	opt_alloc32 = true;
 	malloc_init();
 }
 #endif

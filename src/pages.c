@@ -170,7 +170,26 @@ os_pages_map(void *addr, size_t size, size_t alignment, bool *commit) {
 #endif
 		int prot = *commit ? PAGES_PROT_COMMIT : PAGES_PROT_DECOMMIT;
 
-		ret = mmap(addr, size, prot, flags, PAGES_FD_TAG, 0);
+		// requirements:
+		// - port AddressIterator
+		// - iterate over regions
+		// - try all addresss with hint for page mappings
+		#define MEM32_LIMIT 0XFFFFFFFF
+		uintptr_t upper_limit = MEM32_LIMIT - size;
+
+
+		if (opt_alloc32 && addr == NULL) {
+			uintptr_t p = 0;
+			do {
+				ret = mmap((void *)p, size, prot, flags, PAGES_FD_TAG, 0);
+				if ((ret != NULL) && ((uintptr_t) ret <= upper_limit)) {
+					break;
+				}
+				p += size;
+			} while (p < upper_limit);
+		} else {
+			ret = mmap(addr, size, prot, flags, PAGES_FD_TAG, 0);
+		}
 	}
 	assert(ret != NULL);
 
@@ -355,6 +374,7 @@ os_pages_commit(void *addr, size_t size, bool commit) {
 #else
 	{
 		int prot = commit ? PAGES_PROT_COMMIT : PAGES_PROT_DECOMMIT;
+
 		void *result = mmap(addr, size, prot, mmap_flags | MAP_FIXED,
 		    PAGES_FD_TAG, 0);
 		if (result == MAP_FAILED) {

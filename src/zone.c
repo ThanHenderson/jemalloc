@@ -145,7 +145,7 @@ zone_size(malloc_zone_t *zone, const void *ptr) {
 
 static void *
 zone_malloc(malloc_zone_t *zone, size_t size) {
-	return je_malloc(size);
+	return opt_alloc32 ? je_malloc32(size) : je_malloc(size);
 }
 
 static void *
@@ -216,7 +216,7 @@ zone_batch_malloc(struct _malloc_zone_t *zone, size_t size, void **results,
 	unsigned i;
 
 	for (i = 0; i < num_requested; i++) {
-		results[i] = je_malloc(size);
+		results[i] = opt_alloc32 ? je_malloc32(size) : je_malloc(size);
 		if (!results[i])
 			break;
 	}

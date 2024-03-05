@@ -134,6 +134,23 @@ tsd_fetch_impl(bool init, bool minimal) {
 	return tsd;
 }
 
+JEMALLOC_ALWAYS_INLINE tsd_t *
+tsd_fetch_impl32(bool init, bool minimal) {
+	tsd_t *tsd = tsd_get(init);
+
+	if (!init && tsd_get_allocates() && tsd == NULL) {
+		return NULL;
+	}
+	assert(tsd != NULL);
+
+	if (unlikely(tsd_state_get(tsd) != tsd_state_nominal)) {
+		return tsd_fetch_slow(tsd, minimal);
+	}
+	assert(tsd_fast(tsd));
+	tsd_assert_fast(tsd);
+
+	return tsd;
+}
 /* Get a minimal TSD that requires no cleanup.  See comments in free(). */
 JEMALLOC_ALWAYS_INLINE tsd_t *
 tsd_fetch_min(void) {

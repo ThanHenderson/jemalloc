@@ -89,7 +89,7 @@ handleOOM(std::size_t size, bool nothrow) {
 			break;
 		}
 
-		ptr = je_malloc(size);
+		ptr = je_malloc32(size);
 	}
 
 	if (ptr == nullptr && !nothrow)

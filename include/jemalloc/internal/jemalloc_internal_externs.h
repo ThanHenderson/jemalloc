@@ -12,6 +12,7 @@
 extern bool malloc_slow;
 
 /* Run-time options. */
+extern bool opt_alloc32;
 extern bool opt_abort;
 extern bool opt_abort_conf;
 extern bool opt_trust_madvise;
@@ -75,5 +76,6 @@ void jemalloc_postfork_child(void);
 void sdallocx_default(void *ptr, size_t size, int flags);
 void free_default(void *ptr);
 void *malloc_default(size_t size);
+void *malloc32_default(size_t size);
 
 #endif /* JEMALLOC_INTERNAL_EXTERNS_H */
